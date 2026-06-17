@@ -417,15 +417,17 @@ class CryptoRow(Gtk.ListBoxRow):
 class DisplayWidget(Gtk.Box):
     """Widget de display minimalista estilo dashboard para modo glass."""
     
-    def __init__(self, crypto: Crypto, available_cryptos: list = None, on_asset_change=None, on_back=None, on_pin_toggle=None, is_pinned: bool = False, pin_supported: bool = True):
+    def __init__(self, crypto: Crypto, available_cryptos: list = None, on_asset_change=None, on_back=None, on_pin_toggle=None, on_quick_assets_reordered=None, is_pinned: bool = False, pin_supported: bool = True, quick_assets: list = None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.crypto = crypto
         self.available_cryptos = available_cryptos or []
         self.on_asset_change = on_asset_change
         self.on_back = on_back
         self.on_pin_toggle = on_pin_toggle
+        self.on_quick_assets_reordered = on_quick_assets_reordered
         self.is_pinned = is_pinned
         self.pin_supported = pin_supported
+        self.quick_assets = [s.lower() for s in (quick_assets or [])]
         
         self.set_margin_top(12)
         self.set_margin_bottom(12)
@@ -452,9 +454,9 @@ class DisplayWidget(Gtk.Box):
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         content.set_vexpand(True)
         
-        # Header com ícone/nome à esquerda, preço no centro e espaço à direita para o botão
+        # Header com ícone/nome à esquerda e preço à direita (com espaço para os botões do overlay)
         header = Gtk.CenterBox()
-        header.set_margin_end(40)  # Espaço para o botão de modo completo no overlay
+        header.set_margin_end(48)  # Espaço para os botões de pin e modo completo no overlay
         
         # Ícone e nome à esquerda
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -480,9 +482,9 @@ class DisplayWidget(Gtk.Box):
         left_box.append(name_box)
         header.set_start_widget(left_box)
         
-        # Preço com seta de tendência no centro
+        # Preço com seta de tendência à direita
         price_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        price_box.set_halign(Gtk.Align.CENTER)
+        price_box.set_halign(Gtk.Align.END)
         price_box.set_valign(Gtk.Align.CENTER)
         
         trend_icon = Gtk.Label(label="▲" if self.crypto.is_positive_24h else "▼")
@@ -495,7 +497,7 @@ class DisplayWidget(Gtk.Box):
         price_label.add_css_class("numeric")
         price_box.append(price_label)
         
-        header.set_center_widget(price_box)
+        header.set_end_widget(price_box)
         content.append(header)
         
         # Variações 1h / 24h / 7d
@@ -571,17 +573,14 @@ class DisplayWidget(Gtk.Box):
             
             content.append(chart_overlay)
         
-        # Botões de troca de ativo com preço e variação 1h
-        assets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        assets_box.set_halign(Gtk.Align.CENTER)
-        assets_box.set_margin_top(6)
-        assets_box.set_valign(Gtk.Align.END)
+        # Botões de troca de ativo com preço e variação 1h (5 primeiros, reordenáveis)
+        self.assets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.assets_box.set_halign(Gtk.Align.CENTER)
+        self.assets_box.set_margin_top(6)
+        self.assets_box.set_valign(Gtk.Align.END)
+        self._rebuild_asset_buttons()
         
-        for symbol in ["BTC", "ETH", "SOL", "XRP"]:
-            btn = self._create_asset_button(symbol)
-            assets_box.append(btn)
-        
-        content.append(assets_box)
+        content.append(self.assets_box)
         
         overlay.set_child(content)
         
@@ -626,30 +625,115 @@ class DisplayWidget(Gtk.Box):
         if self.on_pin_toggle:
             self.on_pin_toggle(self.is_pinned)
     
-    def _create_asset_button(self, symbol: str) -> Gtk.Button:
-        """Cria botão de ativo mostrando preço e variação 1h."""
+    def _get_quick_assets(self) -> List[str]:
+        """Retorna os 5 símbolos de acesso rápido (ordem salva + primeiros da lista)."""
+        # Símbolos disponíveis, excluindo USD-BRL
+        available_symbols = [
+            c.symbol.upper() for c in self.available_cryptos
+            if c.symbol.lower() != "usd" and c.id.lower() != "usd-brl"
+        ]
+
+        # Começa com a ordem salva, mantendo apenas os que ainda existem
+        result = []
+        for symbol in self.quick_assets:
+            sym_upper = symbol.upper()
+            if sym_upper in available_symbols and sym_upper not in result:
+                result.append(sym_upper)
+
+        # Completa com os primeiros ativos da lista até ter 5
+        for symbol in available_symbols:
+            if len(result) >= 5:
+                break
+            if symbol not in result:
+                result.append(symbol)
+
+        return result[:5]
+
+    def _rebuild_asset_buttons(self):
+        """Reconstrói os botões de acesso rápido."""
+        # Remove botões antigos
+        while True:
+            child = self.assets_box.get_first_child()
+            if child is None:
+                break
+            self.assets_box.remove(child)
+
+        for i, symbol in enumerate(self._get_quick_assets()):
+            btn = self._create_asset_button(symbol, index=i)
+            self.assets_box.append(btn)
+
+    def _on_asset_drag_prepare(self, source, x, y):
+        """Prepara o drag de um botão de ativo."""
+        btn = source.get_widget()
+        index = btn.get_data("quick-index")
+        if index is None:
+            return None
+
+        # Cria um provider de conteúdo simples com o índice
+        value = GObject.Value(GObject.TYPE_INT)
+        value.set_int(index)
+        return Gdk.ContentProvider.new_for_value(value)
+
+    def _on_asset_drag_begin(self, source, drag):
+        """Início do drag: adiciona classe visual."""
+        btn = source.get_widget()
+        btn.add_css_class("card")
+
+    def _on_asset_drag_end(self, source, drag, delete_data):
+        """Fim do drag: remove classe visual."""
+        btn = source.get_widget()
+        btn.remove_css_class("card")
+
+    def _on_asset_drop(self, drop_target, value, x, y):
+        """Recebe o drop e reordena os ativos."""
+        source_index = value.get_int()
+        target_btn = drop_target.get_widget()
+        target_index = target_btn.get_data("quick-index")
+
+        if source_index is None or target_index is None or source_index == target_index:
+            return False
+
+        assets = self._get_quick_assets()
+        if source_index >= len(assets) or target_index >= len(assets):
+            return False
+
+        # Move o item
+        moved = assets.pop(source_index)
+        assets.insert(target_index, moved)
+
+        # Atualiza ordem salva
+        self.quick_assets = [s.lower() for s in assets]
+        if self.on_quick_assets_reordered:
+            self.on_quick_assets_reordered(self.quick_assets)
+
+        # Reconstrói os botões
+        self._rebuild_asset_buttons()
+        return True
+
+    def _create_asset_button(self, symbol: str, index: int = 0) -> Gtk.Button:
+        """Cria botão de ativo mostrando preço e variação 1h (com drag and drop)."""
         crypto = self._get_crypto_by_symbol(symbol)
         is_current = symbol.lower() == self.crypto.symbol.lower()
-        
+
         # Container vertical para o conteúdo do botão
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         box.set_margin_top(4)
         box.set_margin_bottom(4)
         box.set_margin_start(6)
         box.set_margin_end(6)
-        
+
         # Símbolo
         symbol_label = Gtk.Label(label=symbol)
         symbol_label.add_css_class("caption-heading")
         box.append(symbol_label)
-        
+
         if crypto:
             # Preço
             price_label = Gtk.Label(label=crypto.formatted_price)
             price_label.add_css_class("caption")
             price_label.add_css_class("numeric")
             box.append(price_label)
-            
+
             # Variação 1h
             change_label = Gtk.Label(label=f"{crypto.price_change_percentage_1h:+.2f}%")
             change_label.add_css_class("caption")
@@ -662,14 +746,29 @@ class DisplayWidget(Gtk.Box):
             na_label.add_css_class("caption")
             na_label.add_css_class("dim-label")
             box.append(na_label)
-        
+
         btn = Gtk.Button()
         btn.set_child(box)
         btn.add_css_class("asset-button")
         if is_current:
             btn.add_css_class("suggested-action")
         btn.connect("clicked", self._on_asset_button_clicked, symbol.lower())
-        
+        btn.set_data("quick-index", index)
+        btn.set_tooltip_text(f"Arraste para reordenar\n{symbol}")
+
+        # Drag source
+        drag_source = Gtk.DragSource()
+        drag_source.set_actions(Gdk.DragAction.MOVE)
+        drag_source.connect("prepare", self._on_asset_drag_prepare)
+        drag_source.connect("drag-begin", self._on_asset_drag_begin)
+        drag_source.connect("drag-end", self._on_asset_drag_end)
+        btn.add_controller(drag_source)
+
+        # Drop target
+        drop_target = Gtk.DropTarget.new(GObject.TYPE_INT, Gdk.DragAction.MOVE)
+        drop_target.connect("drop", self._on_asset_drop)
+        btn.add_controller(drop_target)
+
         return btn
     
     def _on_asset_button_clicked(self, button, symbol):

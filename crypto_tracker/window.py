@@ -389,8 +389,10 @@ class CryptoWindow(Adw.ApplicationWindow):
             on_asset_change=self._on_display_asset_changed,
             on_back=self._on_display_back,
             on_pin_toggle=self._on_display_pin_toggled,
+            on_quick_assets_reordered=self._on_quick_assets_reordered,
             is_pinned=self.settings.display_pinned,
-            pin_supported=self._supports_keep_above
+            pin_supported=self._supports_keep_above,
+            quick_assets=self.settings.display_quick_assets
         )
         self.display_container.append(self.display_widget)
     
@@ -399,6 +401,10 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.display_asset = symbol
         self.settings.display_asset = symbol
         self._update_display()
+
+    def _on_quick_assets_reordered(self, quick_assets: list):
+        """Salva a nova ordem dos ativos de acesso rápido."""
+        self.settings.display_quick_assets = quick_assets
     
     def _on_display_back(self):
         """Volta ao modo completo."""

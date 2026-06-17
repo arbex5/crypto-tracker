@@ -42,7 +42,8 @@ class Settings:
             'display_asset': 'bitcoin',
             'display_opacity': 0.95,
             'display_pinned': False,
-            'auto_refresh_interval': 5
+            'auto_refresh_interval': 5,
+            'display_quick_assets': []
         }
     
     def save(self):
@@ -165,6 +166,16 @@ class Settings:
     @auto_refresh_interval.setter
     def auto_refresh_interval(self, value: int):
         self._data['auto_refresh_interval'] = max(0, int(value))
+        self.save()
+
+    @property
+    def display_quick_assets(self) -> list:
+        """Lista de símbolos dos ativos de acesso rápido do modo display."""
+        return list(self._data.get('display_quick_assets', []))
+
+    @display_quick_assets.setter
+    def display_quick_assets(self, value: list):
+        self._data['display_quick_assets'] = [str(v).lower() for v in value]
         self.save()
 
     def has_api_key(self) -> bool:

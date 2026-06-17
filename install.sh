@@ -148,6 +148,15 @@ install_app() {
         print_info "Ícones padrão copiados"
     fi
     
+    # Instala o ícone do aplicativo
+    ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$ICON_DIR"
+    if [ -f "icons/crypto-tracker.svg" ]; then
+        cp "icons/crypto-tracker.svg" "$ICON_DIR/crypto-tracker.svg"
+        gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+        print_info "Ícone do aplicativo instalado"
+    fi
+    
     # Cria o script de execução
     cat > "$HOME/.local/bin/crypto-tracker" << 'EOF'
 #!/bin/bash
@@ -171,7 +180,7 @@ Comment=Acompanhe criptomoedas em tempo real by Fernando Arbex
 Exec=$HOME/.local/bin/crypto-tracker
 Type=Application
 Terminal=false
-Icon=application-x-executable-symbolic
+Icon=crypto-tracker
 Categories=Office;Finance;Network;
 Keywords=crypto;bitcoin;ethereum;criptomoedas;preço;coinmarketcap;coingecko;
 StartupNotify=true
@@ -202,6 +211,14 @@ install_system() {
         print_info "Ícones padrão copiados"
     fi
     
+    # Instala o ícone do aplicativo
+    if [ -f "icons/crypto-tracker.svg" ]; then
+        sudo mkdir -p "/usr/local/share/icons/hicolor/scalable/apps"
+        sudo cp "icons/crypto-tracker.svg" "/usr/local/share/icons/hicolor/scalable/apps/crypto-tracker.svg"
+        sudo gtk-update-icon-cache -f /usr/local/share/icons/hicolor 2>/dev/null || true
+        print_info "Ícone do aplicativo instalado"
+    fi
+    
     # Script de execução
     sudo tee /usr/local/bin/crypto-tracker > /dev/null << 'EOF'
 #!/bin/bash
@@ -220,7 +237,7 @@ Comment=Acompanhe criptomoedas em tempo real by Fernando Arbex
 Exec=crypto-tracker
 Type=Application
 Terminal=false
-Icon=application-x-executable-symbolic
+Icon=crypto-tracker
 Categories=Office;Finance;Network;
 Keywords=crypto;bitcoin;ethereum;criptomoedas;preço;coinmarketcap;coingecko;
 StartupNotify=true

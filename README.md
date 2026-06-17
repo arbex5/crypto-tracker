@@ -41,7 +41,7 @@ Aplicativo GTK4 para Linux que mostra criptomoedas em tempo real usando as APIs 
 
 ```bash
 # Clone o repositório
-git clone https://github.com/fernandoarbex/crypto-tracker.git
+git clone https://github.com/arbex5/crypto-tracker.git
 cd crypto-tracker
 
 # Execute o instalador

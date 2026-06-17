@@ -36,6 +36,7 @@ class CryptoWindow(Adw.ApplicationWindow):
         self._in_special_mode = False
         self._supports_keep_above = hasattr(Gtk.Window, 'set_keep_above')
         self._refresh_timer_id = None
+        self._has_initial_data = False
         
         self._build_ui()
         self._load_data()
@@ -120,10 +121,15 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.status_label.add_css_class("dim-label")
         self.status_label.add_css_class("caption")
         
+        self.status_spinner = Gtk.Spinner()
+        self.status_spinner.set_margin_start(8)
+        self.status_spinner.set_visible(False)
+        
         self.status_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.status_box.set_halign(Gtk.Align.CENTER)
         self.status_box.set_margin_bottom(6)
         self.status_box.append(self.status_label)
+        self.status_box.append(self.status_spinner)
         
         # Cabeçalho da lista
         self.header_row = HeaderRow(compact=False)
@@ -219,11 +225,17 @@ class CryptoWindow(Adw.ApplicationWindow):
         # Cancela worker anterior se existir
         if self.current_worker and self.current_worker.is_alive():
             self.current_worker.cancel()
-        
-        self.spinner.start()
-        self.stack.set_visible_child_name("loading")
+
+        # Mostra spinner discreto na status bar
+        self.status_spinner.set_visible(True)
+        self.status_spinner.start()
         self.status_label.set_text("Atualizando...")
-        
+
+        # Só mostra tela de loading em tela cheia se nunca tivermos carregado dados
+        if not self._has_initial_data:
+            self.spinner.start()
+            self.stack.set_visible_child_name("loading")
+
         # Cria e inicia o worker
         self.current_worker = APIWorker(
             self.api,
@@ -235,6 +247,13 @@ class CryptoWindow(Adw.ApplicationWindow):
     
     def _on_data_loaded(self, cryptos: List[Crypto]):
         """Callback chamado quando os dados são carregados."""
+        self._has_initial_data = True
+
+        # Para spinner discreto
+        self.status_spinner.stop()
+        self.status_spinner.set_visible(False)
+        self.spinner.stop()
+
         # Aplica estado de favorito dos dados salvos
         for crypto in cryptos:
             crypto.is_favorite = self.settings.is_favorite(crypto.id)
@@ -251,9 +270,8 @@ class CryptoWindow(Adw.ApplicationWindow):
 
         self._update_list()
         self._update_display()
-        self.spinner.stop()
 
-        # Mostra a página correta
+        # Mantém a página atual visível (não troca para loading)
         if self.glass_mode:
             self._apply_display_layout()
         else:

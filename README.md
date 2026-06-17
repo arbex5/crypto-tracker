@@ -129,7 +129,9 @@ Acesse via **Menu → Preferências**:
 
 ## 🖼️ Ícones de Criptomoedas
 
-Para ter ícones visuais das moedas em vez de círculos coloridos:
+O projeto já inclui alguns ícones padrão (BTC, ETH, SOL, XRP, LINK e outros) na pasta `icons/`. Eles são copiados automaticamente durante a instalação.
+
+Para adicionar mais ícones visuais das moedas em vez de círculos coloridos:
 
 1. **Abra a pasta de ícones**:
    ```

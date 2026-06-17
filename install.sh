@@ -142,6 +142,12 @@ install_app() {
     print_info "Copiando arquivos para $INSTALL_DIR..."
     cp -r crypto_tracker "$INSTALL_DIR/"
     
+    # Copia ícones padrão (se existirem no projeto)
+    if [ -d "icons" ] && [ "$(ls -A icons 2>/dev/null)" ]; then
+        cp -r icons/* "$HOME/.local/share/crypto-tracker/icons/" 2>/dev/null || true
+        print_info "Ícones padrão copiados"
+    fi
+    
     # Cria o script de execução
     cat > "$HOME/.local/bin/crypto-tracker" << 'EOF'
 #!/bin/bash
@@ -189,6 +195,12 @@ install_system() {
     sudo mkdir -p "$INSTALL_DIR"
     sudo cp -r crypto_tracker "$INSTALL_DIR/"
     sudo mkdir -p "$INSTALL_DIR/icons"
+    
+    # Copia ícones padrão (se existirem no projeto)
+    if [ -d "icons" ] && [ "$(ls -A icons 2>/dev/null)" ]; then
+        sudo cp -r icons/* "$INSTALL_DIR/icons/" 2>/dev/null || true
+        print_info "Ícones padrão copiados"
+    fi
     
     # Script de execução
     sudo tee /usr/local/bin/crypto-tracker > /dev/null << 'EOF'

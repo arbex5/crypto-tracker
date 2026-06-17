@@ -41,7 +41,8 @@ class Settings:
             'show_brl_price': False,
             'display_asset': 'bitcoin',
             'display_opacity': 0.95,
-            'display_pinned': False
+            'display_pinned': False,
+            'auto_refresh_interval': 5
         }
     
     def save(self):
@@ -155,7 +156,17 @@ class Settings:
     def display_pinned(self, value: bool):
         self._data['display_pinned'] = bool(value)
         self.save()
-    
+
+    @property
+    def auto_refresh_interval(self) -> int:
+        """Intervalo de auto-atualização em minutos (0 = desativado)."""
+        return int(self._data.get('auto_refresh_interval', 5))
+
+    @auto_refresh_interval.setter
+    def auto_refresh_interval(self, value: int):
+        self._data['auto_refresh_interval'] = max(0, int(value))
+        self.save()
+
     def has_api_key(self) -> bool:
         """Verifica se há uma API key configurada."""
         return bool(self.cmc_api_key)

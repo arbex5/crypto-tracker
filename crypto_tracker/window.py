@@ -35,9 +35,11 @@ class CryptoWindow(Adw.ApplicationWindow):
         self._normal_size = (self.settings.window_width, self.settings.window_height)
         self._in_special_mode = False
         self._supports_keep_above = hasattr(Gtk.Window, 'set_keep_above')
+        self._refresh_timer_id = None
         
         self._build_ui()
         self._load_data()
+        self._setup_auto_refresh()
     
     def _build_ui(self):
         """Constrói a interface do usuário."""
@@ -188,6 +190,30 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.toast_overlay.set_child(toolbar_view)
         self.set_content(self.toast_overlay)
     
+    def _setup_auto_refresh(self):
+        """Configura o timer de atualização automática periódica."""
+        # Remove timer anterior se existir
+        if self._refresh_timer_id is not None:
+            GLib.source_remove(self._refresh_timer_id)
+            self._refresh_timer_id = None
+
+        interval_minutes = self.settings.auto_refresh_interval
+        if interval_minutes <= 0:
+            return
+
+        interval_seconds = interval_minutes * 60
+        self._refresh_timer_id = GLib.timeout_add_seconds(
+            interval_seconds,
+            self._on_auto_refresh_timeout
+        )
+        print(f"[DEBUG] Auto refresh enabled every {interval_minutes} min(s)", flush=True)
+
+    def _on_auto_refresh_timeout(self):
+        """Callback do timer de atualização automática."""
+        print("[DEBUG] Auto refresh triggered", flush=True)
+        self._load_data(force_refresh=False)
+        return True  # Mantém o timer ativo
+
     def _load_data(self, force_refresh: bool = False):
         """Carrega os dados das criptomoedas em uma thread separada."""
         # Cancela worker anterior se existir

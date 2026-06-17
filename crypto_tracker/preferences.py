@@ -153,7 +153,44 @@ class PreferencesWindow(Adw.PreferencesWindow):
         display_group.add(favorites_row)
         
         display_page.add(display_group)
-        
+
+        # Grupo de Atualização Automática
+        refresh_group = Adw.PreferencesGroup.new()
+        refresh_group.set_title("Atualização Automática")
+        refresh_group.set_description(
+            "Atualiza os dados periodicamente. Chamadas à API só acontecem "
+            "quando o cache expira (padrão: 5 minutos), economizando créditos."
+        )
+
+        refresh_row = Adw.ActionRow.new()
+        refresh_row.set_title("Intervalo de atualização")
+        refresh_row.set_subtitle("Atualizar automaticamente a cada")
+
+        refresh_options = [
+            (0, "Desativado"),
+            (1, "1 minuto"),
+            (5, "5 minutos"),
+            (15, "15 minutos"),
+            (30, "30 minutos"),
+            (60, "1 hora"),
+        ]
+        self._refresh_options = refresh_options
+
+        refresh_dropdown = Gtk.DropDown.new_from_strings([label for _, label in refresh_options])
+        current_interval = self.settings.auto_refresh_interval
+        selected_index = 0
+        for i, (value, _) in enumerate(refresh_options):
+            if value == current_interval:
+                selected_index = i
+                break
+        refresh_dropdown.set_selected(selected_index)
+        refresh_dropdown.connect("notify::selected", self._on_refresh_interval_changed)
+        refresh_dropdown.set_valign(Gtk.Align.CENTER)
+        refresh_row.add_suffix(refresh_dropdown)
+        refresh_group.add(refresh_row)
+
+        display_page.add(refresh_group)
+
         # Grupo do Modo Display
         display_mode_group = Adw.PreferencesGroup.new()
         display_mode_group.set_title("Modo Display")
@@ -397,15 +434,25 @@ class PreferencesWindow(Adw.PreferencesWindow):
         if self.parent_window and self.parent_window.glass_mode:
             self.parent_window.set_opacity(value)
     
+    def _on_refresh_interval_changed(self, dropdown, param):
+        """Altera o intervalo de atualização automática."""
+        selected = dropdown.get_selected()
+        if 0 <= selected < len(self._refresh_options):
+            value, label = self._refresh_options[selected]
+            self.settings.auto_refresh_interval = value
+            if self.parent_window:
+                self.parent_window._setup_auto_refresh()
+            self._show_toast(f"Atualização automática: {label}")
+
     def _on_pin_changed(self, row, param):
         """Ativa/desativa pin no topo."""
         active = row.get_active()
         self.settings.display_pinned = active
-        
+
         # Aplica em tempo real se estiver no modo display
         if self.parent_window and self.parent_window.glass_mode:
-            self.parent_window.set_keep_above(active)
-        
+            self.parent_window._set_keep_above_safe(active)
+
         status = "fixada" if active else "desfixada"
         self._show_toast(f"Janela {status}")
     

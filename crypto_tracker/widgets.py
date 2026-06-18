@@ -444,7 +444,14 @@ class DisplayWidget(Gtk.Box):
             if c.symbol.lower() == target:
                 return c
         return None
-    
+
+    def _get_usd_brl_crypto(self) -> Optional[Crypto]:
+        """Retorna o crypto artificial do USD/BRL, se disponível."""
+        for c in self.available_cryptos:
+            if c.id == "USD-BRL" or c.symbol.lower() == "usd":
+                return c
+        return None
+
     def _build_ui(self):
         # Overlay container para botão discreto de voltar
         overlay = Gtk.Overlay()
@@ -500,33 +507,43 @@ class DisplayWidget(Gtk.Box):
         header.set_end_widget(price_box)
         content.append(header)
         
-        # Variações 1h / 24h / 7d
+        # Variações 1h / 24h / 7d / USD-BRL
         changes_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
         changes_box.set_halign(Gtk.Align.CENTER)
         changes_box.set_margin_top(4)
         changes_box.set_margin_bottom(4)
-        
-        for label, value, is_positive in [
-            ("1h", self.crypto.price_change_percentage_1h, self.crypto.is_positive_1h),
-            ("24h", self.crypto.price_change_percentage_24h, self.crypto.is_positive_24h),
-            ("7d", self.crypto.price_change_percentage_7d, self.crypto.is_positive_7d),
-        ]:
+
+        usd_brl = self._get_usd_brl_crypto()
+
+        change_items = [
+            ("1h", f"{self.crypto.price_change_percentage_1h:+.2f}%", self.crypto.is_positive_1h),
+            ("24h", f"{self.crypto.price_change_percentage_24h:+.2f}%", self.crypto.is_positive_24h),
+            ("7d", f"{self.crypto.price_change_percentage_7d:+.2f}%", self.crypto.is_positive_7d),
+        ]
+
+        if usd_brl:
+            change_items.append(("USD/BRL", f"R${usd_brl.current_price:,.2f}", usd_brl.is_positive_24h))
+
+        for label, value_text, is_positive in change_items:
             change_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
             change_box.set_halign(Gtk.Align.CENTER)
-            
+
             period_label = Gtk.Label(label=label)
             period_label.add_css_class("caption")
             period_label.add_css_class("dim-label")
             change_box.append(period_label)
-            
-            value_label = Gtk.Label(label=f"{value:+.2f}%")
+
+            value_label = Gtk.Label(label=value_text)
             value_label.add_css_class("caption-heading")
             value_label.add_css_class("numeric")
-            value_label.add_css_class("success" if is_positive else "error")
+            if label == "USD/BRL":
+                value_label.add_css_class("success" if is_positive else "error")
+            else:
+                value_label.add_css_class("success" if is_positive else "error")
             change_box.append(value_label)
-            
+
             changes_box.append(change_box)
-        
+
         content.append(changes_box)
         
         # Gráfico grande dos últimos 7 dias com min/max

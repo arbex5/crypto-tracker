@@ -665,7 +665,7 @@ class DisplayWidget(Gtk.Box):
     def _on_asset_drag_prepare(self, source, x, y):
         """Prepara o drag de um botão de ativo."""
         btn = source.get_widget()
-        index = btn.get_data("quick-index")
+        index = getattr(btn, '_quick_index', None)
         if index is None:
             return None
 
@@ -688,7 +688,7 @@ class DisplayWidget(Gtk.Box):
         """Recebe o drop e reordena os ativos."""
         source_index = value.get_int()
         target_btn = drop_target.get_widget()
-        target_index = target_btn.get_data("quick-index")
+        target_index = getattr(target_btn, '_quick_index', None)
 
         if source_index is None or target_index is None or source_index == target_index:
             return False
@@ -753,7 +753,7 @@ class DisplayWidget(Gtk.Box):
         if is_current:
             btn.add_css_class("suggested-action")
         btn.connect("clicked", self._on_asset_button_clicked, symbol.lower())
-        btn.set_data("quick-index", index)
+        btn._quick_index = index
         btn.set_tooltip_text(f"Arraste para reordenar\n{symbol}")
 
         # Drag source

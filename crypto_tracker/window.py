@@ -475,6 +475,9 @@ class CryptoWindow(Adw.ApplicationWindow):
         active = button.get_active()
         print(f"[DEBUG] _on_compact_toggled active={active}, glass_mode={self.glass_mode}", flush=True)
 
+        # Garante que a lista esteja visível (pode estar em loading/display)
+        self.stack.set_visible_child_name("list")
+
         # Se estiver ativando compacto e display estiver ativo, sai do display
         if active and self.glass_mode:
             self.glass_button.set_active(False)
@@ -600,17 +603,21 @@ class CryptoWindow(Adw.ApplicationWindow):
     def _add_glass_css(self):
         """Adiciona CSS do modo glass."""
         self._remove_glass_css()
-        
+
         self._glass_css_provider = Gtk.CssProvider()
-        self._glass_css_provider.load_from_string("""
+        css_data = """
             window {
                 background-color: alpha(@window_bg_color, 0.88);
             }
             .boxed-list {
                 background-color: alpha(@card_bg_color, 0.75);
             }
-        """)
-        
+        """
+        if hasattr(self._glass_css_provider, "load_from_string"):
+            self._glass_css_provider.load_from_string(css_data)
+        else:
+            self._glass_css_provider.load_from_data(css_data.encode("utf-8"))
+
         display = Gdk.Display.get_default()
         if display:
             Gtk.StyleContext.add_provider_for_display(

@@ -110,7 +110,11 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.search_box.set_margin_end(12)
         
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text("Buscar...")
+        # Compatibilidade: versões novas do GTK expõem set_placeholder_text
+        if hasattr(self.search_entry, "set_placeholder_text"):
+            self.search_entry.set_placeholder_text("Buscar...")
+        else:
+            self.search_entry.set_property("placeholder-text", "Buscar...")
         self.search_entry.set_hexpand(True)
         self.search_entry.connect("search-changed", self._on_search_changed)
         
@@ -186,14 +190,19 @@ class CryptoWindow(Adw.ApplicationWindow):
         content.append(self.status_box)
         content.append(self.stack)
         
-        # Toolbar view para layout moderno
-        toolbar_view = Adw.ToolbarView()
-        toolbar_view.add_top_bar(header)
-        toolbar_view.set_content(content)
-        
+        # Layout principal (ToolbarView em versões novas, Box em versões antigas)
+        if hasattr(Adw, "ToolbarView"):
+            main_layout = Adw.ToolbarView()
+            main_layout.add_top_bar(header)
+            main_layout.set_content(content)
+        else:
+            main_layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            main_layout.append(header)
+            main_layout.append(content)
+
         # Toast overlay para notificações
         self.toast_overlay = Adw.ToastOverlay()
-        self.toast_overlay.set_child(toolbar_view)
+        self.toast_overlay.set_child(main_layout)
         self.set_content(self.toast_overlay)
     
     def _setup_auto_refresh(self):

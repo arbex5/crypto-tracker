@@ -18,13 +18,19 @@ from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 from .window import CryptoWindow
 
 
+# Compatibilidade com diferentes versões do GTK4/Libadwaita
+APPLICATION_FLAGS = getattr(
+    Gio.ApplicationFlags, "DEFAULT_FLAGS", Gio.ApplicationFlags.FLAGS_NONE
+)
+
+
 class CryptoApp(Adw.Application):
     """Aplicativo principal Crypto Tracker by Fernando Arbex."""
-    
+
     def __init__(self):
         super().__init__(
             application_id="com.fernandoarbex.CryptoTracker",
-            flags=Gio.ApplicationFlags.DEFAULT_FLAGS
+            flags=APPLICATION_FLAGS
         )
         
         self.window = None
@@ -113,57 +119,63 @@ class CryptoApp(Adw.Application):
 def setup_css():
     """Configura o CSS customizado do aplicativo."""
     css_provider = Gtk.CssProvider()
-    css_provider.load_from_string("""
+    css_data = """
         .success {
             color: #26a17b;
             font-weight: 600;
         }
-        
+
         .error {
             color: #ea3943;
             font-weight: 600;
         }
-        
+
         .numeric {
             font-feature-settings: "tnum";
             font-variant-numeric: tabular-nums;
         }
-        
+
         .crypto-row {
             transition: background-color 0.2s;
         }
-        
+
         .crypto-row:hover {
             background-color: alpha(@theme_fg_color, 0.05);
         }
-        
+
         /* Estilo para sparkline */
         .sparkline-positive {
             color: #26a17b;
         }
-        
+
         .sparkline-negative {
             color: #ea3943;
         }
-        
+
         /* Compact mode adjustments */
         .compact-row {
             padding: 4px 8px;
         }
-        
+
         /* Botões de ativo no modo display */
         .asset-button {
             border-radius: 8px;
             padding: 4px 8px;
             min-width: 70px;
         }
-        
+
         .asset-button.suggested-action {
             background-color: alpha(@accent_bg_color, 0.85);
             color: @accent_fg_color;
         }
-    """)
-    
+    """
+
+    # Compatibilidade: versões novas usam load_from_string, antigas load_from_data
+    if hasattr(css_provider, "load_from_string"):
+        css_provider.load_from_string(css_data)
+    else:
+        css_provider.load_from_data(css_data.encode("utf-8"))
+
     display = Gdk.Display.get_default()
     if display:
         Gtk.StyleContext.add_provider_for_display(

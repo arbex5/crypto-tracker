@@ -62,12 +62,16 @@ class Settings:
     
     @property
     def use_cmc(self) -> bool:
-        return bool(self._data.get('use_cmc', False) and self.cmc_api_key)
+        return bool(self._data.get('use_cmc', False))
     
     @use_cmc.setter
     def use_cmc(self, value: bool):
         self._data['use_cmc'] = value
         self.save()
+
+    def can_use_cmc(self) -> bool:
+        """Verifica se o CMC pode ser usado (ativado E com API key)."""
+        return self.use_cmc and bool(self.cmc_api_key)
     
     @property
     def cache_duration(self) -> int:

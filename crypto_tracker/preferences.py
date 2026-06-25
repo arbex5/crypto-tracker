@@ -23,6 +23,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
         self.settings = Settings()
         self.parent_window = parent_window
+        self._updating_switch = False
 
         self.set_default_size(600, 550)
         self.set_title("Preferências")
@@ -398,7 +399,12 @@ class PreferencesWindow(Adw.PreferencesWindow):
                 with urllib.request.urlopen(request, timeout=10) as response:
                     data = response.read()
                     result = data.decode('utf-8')
-                    GLib.idle_add(lambda: self._show_toast("✅ API funcionando!"))
+
+                    def on_success():
+                        self.settings.cmc_api_key = key
+                        self._show_toast("✅ API funcionando! Key salva.")
+
+                    GLib.idle_add(on_success)
 
             except Exception as e:
                 GLib.idle_add(lambda: self._show_toast(f"❌ Erro: {str(e)[:50]}"))
@@ -419,12 +425,23 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
     def _on_use_cmc_changed(self, switch, param):
         """Ativa/desativa uso do CMC."""
+        if self._updating_switch:
+            return
+
         active = switch.get_active()
 
-        if active and not self.settings.cmc_api_key:
-            switch.set_active(False)
-            self._show_toast("Configure uma API Key primeiro!")
-            return
+        # Se ativando, sempre sincroniza a key do campo primeiro
+        if active:
+            current_key = self.api_key_entry.get_text().strip()
+            if current_key:
+                self.settings.cmc_api_key = current_key
+
+            if not self.settings.cmc_api_key:
+                self._updating_switch = True
+                switch.set_active(False)
+                self._updating_switch = False
+                self._show_toast("Configure uma API Key primeiro!")
+                return
 
         self.settings.use_cmc = active
         status = "ativado" if active else "desativado"

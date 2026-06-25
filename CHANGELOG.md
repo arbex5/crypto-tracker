@@ -2,6 +2,37 @@
 
 Todas as mudanças e melhorias feitas no projeto estão documentadas aqui.
 
+## [1.2.1] - 2026-06-25
+
+### 🔧 Correções de bugs
+
+- Corrigido redimensionamento no modo Display minimalista
+  - O GTK4 não permite redimensionar janelas já visíveis via API
+  - Reduzido o tamanho mínimo do conteúdo para permitir que o usuário
+    redimensione manualmente para aproximadamente 357x285
+- Melhorado modo Compacto
+  - Layout simplificado: mantém a `HeaderBar` no `ToolbarView` e apenas
+    esconde busca, status e cabeçalho da lista
+  - A janela agora pode ser redimensionada para aproximadamente 400x400
+- Protegido salvamento do tamanho da janela durante transições de modo
+  - Adicionada flag `_block_size_save` para ignorar redimensionamentos
+    provocados pela troca entre modos normal/compacto/display
+  - Evita que valores transitórios (ex: 400x378) sejam salvos em
+    `settings.json`
+
+### 📝 Documentação
+
+- Adicionado `docs/WINDOW_RESIZE_NOTES.md` com as descobertas técnicas
+  sobre redimensionamento no GTK4 e as decisões de implementação
+
+### 🗂️ Arquivos modificados
+
+- `crypto_tracker/window.py` - Refatoração dos modos compacto/display e
+  proteção do salvamento de tamanho
+- `crypto_tracker/widgets.py` - Sparkline e DisplayWidget mais flexíveis
+- `crypto_tracker/main.py` - Ajuste no CSS dos botões de ativo do display
+- `docs/WINDOW_RESIZE_NOTES.md` - Nova documentação técnica
+
 ## [1.2.0] - 2026-06-17
 
 ### ✨ Novas funcionalidades

@@ -34,9 +34,12 @@ class CryptoWindow(Adw.ApplicationWindow):
         self._glass_css_provider = None
         self._normal_size = (self.settings.window_width, self.settings.window_height)
         self._in_special_mode = False
+        self._block_size_save = False
+        self._window_presented = False
         self._supports_keep_above = hasattr(Gtk.Window, 'set_keep_above')
         self._refresh_timer_id = None
         self._has_initial_data = False
+        self._normal_title_widget = None
         
         self._build_ui()
         self._load_data()
@@ -57,6 +60,7 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.connect("notify::default-width", self._on_window_size_changed)
         self.connect("notify::default-height", self._on_window_size_changed)
         self.connect("close-request", self._on_close_request)
+        self.connect("realize", self._on_window_realized)
         
         # Header bar
         self.main_header = Adw.HeaderBar()
@@ -94,10 +98,10 @@ class CryptoWindow(Adw.ApplicationWindow):
         header.pack_end(menu_button)
         
         # Botão de atualizar
-        refresh_button = Gtk.Button(icon_name="view-refresh-symbolic")
-        refresh_button.set_tooltip_text("Atualizar dados (Ctrl+R)")
-        refresh_button.connect("clicked", self._on_refresh_clicked)
-        header.pack_end(refresh_button)
+        self.refresh_button = Gtk.Button(icon_name="view-refresh-symbolic")
+        self.refresh_button.set_tooltip_text("Atualizar dados (Ctrl+R)")
+        self.refresh_button.connect("clicked", self._on_refresh_clicked)
+        header.pack_end(self.refresh_button)
         
         # Box principal
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -152,30 +156,32 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.list_container.append(self.listbox)
 
         # Scrolled window para a lista
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_vexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_child(self.list_container)
+        self._scrolled = Gtk.ScrolledWindow()
+        self._scrolled.set_vexpand(True)
+        self._scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self._scrolled.set_propagate_natural_width(False)
+        self._scrolled.set_propagate_natural_height(False)
+        self._scrolled.set_child(self.list_container)
         
         # Loading spinner
         self.spinner = Gtk.Spinner()
         self.spinner.set_margin_top(20)
         self.spinner.set_margin_bottom(20)
         
-        spinner_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        spinner_center.set_vexpand(True)
-        spinner_center.set_valign(Gtk.Align.CENTER)
-        spinner_center.set_halign(Gtk.Align.CENTER)
-        spinner_center.append(self.spinner)
+        self._spinner_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._spinner_center.set_vexpand(True)
+        self._spinner_center.set_valign(Gtk.Align.CENTER)
+        self._spinner_center.set_halign(Gtk.Align.CENTER)
+        self._spinner_center.append(self.spinner)
         
         loading_label = Gtk.Label(label="Carregando...")
         loading_label.add_css_class("dim-label")
         loading_label.set_margin_top(8)
-        spinner_center.append(loading_label)
+        self._spinner_center.append(loading_label)
         
         self.stack = Gtk.Stack()
-        self.stack.add_named(scrolled, "list")
-        self.stack.add_named(spinner_center, "loading")
+        self.stack.add_named(self._scrolled, "list")
+        self.stack.add_named(self._spinner_center, "loading")
         
         # Container para o modo display (preenchido depois)
         self.display_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -185,24 +191,24 @@ class CryptoWindow(Adw.ApplicationWindow):
         self.stack.set_visible_child_name("loading")
         
         # Monta a interface
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        content.append(self.search_box)
-        content.append(self.status_box)
-        content.append(self.stack)
+        self._content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._content.append(self.search_box)
+        self._content.append(self.status_box)
+        self._content.append(self.stack)
         
         # Layout principal (ToolbarView em versões novas, Box em versões antigas)
         if hasattr(Adw, "ToolbarView"):
-            main_layout = Adw.ToolbarView()
-            main_layout.add_top_bar(header)
-            main_layout.set_content(content)
+            self._main_layout = Adw.ToolbarView()
+            self._main_layout.add_top_bar(header)
+            self._main_layout.set_content(self._content)
         else:
-            main_layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            main_layout.append(header)
-            main_layout.append(content)
+            self._main_layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            self._main_layout.append(header)
+            self._main_layout.append(self._content)
 
         # Toast overlay para notificações
         self.toast_overlay = Adw.ToastOverlay()
-        self.toast_overlay.set_child(main_layout)
+        self.toast_overlay.set_child(self._main_layout)
         self.set_content(self.toast_overlay)
     
     def _setup_auto_refresh(self):
@@ -295,7 +301,7 @@ class CryptoWindow(Adw.ApplicationWindow):
             )
             self._show_toast(f"Erro: {self.api.last_error}", "warning")
         else:
-            source = "CMC" if self.settings.use_cmc else "CoinGecko"
+            source = "CMC" if self.settings.can_use_cmc() else "CoinGecko"
             self.status_label.set_text(
                 f"✅ {len(cryptos)} cryptos via {source} | "
                 f"Calls: {stats['calls_today']}"
@@ -372,7 +378,10 @@ class CryptoWindow(Adw.ApplicationWindow):
             self.listbox.remove(child)
         
         # Adiciona novos itens
-        for crypto in self.filtered_cryptos:
+        max_items = 5 if self.compact_mode else len(self.filtered_cryptos)
+        for i, crypto in enumerate(self.filtered_cryptos):
+            if i >= max_items:
+                break
             row = CryptoRow(
                 crypto,
                 compact=self.compact_mode,
@@ -462,7 +471,7 @@ class CryptoWindow(Adw.ApplicationWindow):
         if query:
             self.status_label.set_text(f"🔍 {count} de {total} cryptos")
         else:
-            source = "CMC" if self.settings.use_cmc else "CoinGecko"
+            source = "CMC" if self.settings.can_use_cmc() else "CoinGecko"
             self.status_label.set_text(f"✅ {count} cryptos via {source}")
     
     def _on_refresh_clicked(self, button: Gtk.Button):
@@ -475,16 +484,13 @@ class CryptoWindow(Adw.ApplicationWindow):
         active = button.get_active()
         print(f"[DEBUG] _on_compact_toggled active={active}, glass_mode={self.glass_mode}", flush=True)
 
-        # Garante que a lista esteja visível (pode estar em loading/display)
-        self.stack.set_visible_child_name("list")
-
         # Se estiver ativando compacto e display estiver ativo, sai do display
         if active and self.glass_mode:
             self.glass_button.set_active(False)
 
         self.compact_mode = active
 
-        # Atualiza header
+        # Atualiza header da lista
         parent = self.header_row.get_parent()
         if parent:
             parent.remove(self.header_row)
@@ -495,15 +501,27 @@ class CryptoWindow(Adw.ApplicationWindow):
         # Atualiza lista
         self._update_list()
 
-        # Ajusta tamanho da janela
+        # Ajusta layout e tamanho
         if self.compact_mode:
             self._enter_special_mode()
-            self.set_default_size(350, 600)
+            # Remove o título da header bar para liberar espaço horizontal
+            self._normal_title_widget = self.main_header.get_title_widget()
+            self.main_header.set_title_widget(None)
+            # Aplica layout compacto simplificado
+            self._apply_compact_layout()
             self._show_toast("Modo Compacto ativado", "info")
         else:
             self._leave_special_mode()
+            # Restaura o título da header bar
+            if self._normal_title_widget is not None:
+                self.main_header.set_title_widget(self._normal_title_widget)
+                self._normal_title_widget = None
+            # Restaura layout completo
+            self._apply_full_layout()
             self._restore_normal_size()
             self._show_toast("Modo Normal", "info")
+
+        GLib.idle_add(self._debug_sizes)
     
     def _on_glass_toggled(self, button):
         """Alterna modo display minimalista / modo completo."""
@@ -523,6 +541,8 @@ class CryptoWindow(Adw.ApplicationWindow):
             self._disable_glass_mode()
             self._show_toast("Modo Completo", "info")
 
+        GLib.idle_add(self._debug_sizes)
+
     def _enable_glass_mode(self):
         """Ativa modo display minimalista."""
         print(f"[DEBUG] _enable_glass_mode pinned={self.settings.display_pinned}", flush=True)
@@ -540,11 +560,13 @@ class CryptoWindow(Adw.ApplicationWindow):
         # Remove decoração
         self.set_decorated(False)
 
-        # Tamanho do display
-        self.set_default_size(360, 520)
-
         # Aplica layout do display
         self._apply_display_layout()
+
+        # GTK4 não permite redimensionar uma janela já visível via API.
+        # Reduzimos o size-request do conteúdo para que o WM permita que o
+        # usuário redimensione manualmente para baixo.
+        self.display_container.set_size_request(280, 240)
 
     def _disable_glass_mode(self):
         """Desativa modo display e volta ao modo completo."""
@@ -556,26 +578,37 @@ class CryptoWindow(Adw.ApplicationWindow):
         # Remove CSS personalizado
         self._remove_glass_css()
 
+        # Limpa restrição de tamanho do display
+        self.display_container.set_size_request(-1, -1)
+
         self._leave_special_mode()
 
-        # Restaura tamanho
-        if self.compact_mode:
-            self.set_default_size(350, 600)
-        else:
-            self._restore_normal_size()
-
-        # Aplica layout completo
+        # Restaura layout completo
         self._apply_full_layout()
     
     def _set_keep_above_safe(self, keep_above: bool):
         """Define keep_above se a API do GTK suportar (nem sempre disponível no GTK4/Wayland)."""
         if self._supports_keep_above and hasattr(self, 'set_keep_above'):
             try:
-                self._set_keep_above_safe(keep_above)
+                self.set_keep_above(keep_above)
             except Exception as e:
                 print(f"[DEBUG] set_keep_above failed: {e}", flush=True)
         else:
             print(f"[DEBUG] keep_above not supported by this GTK/window manager", flush=True)
+
+    def _on_window_realized(self, window):
+        """Marca que a janela já foi apresentada ao window manager."""
+        self._window_presented = True
+
+    def _block_size_saving(self):
+        """Bloqueia salvamento de tamanho por um curto período."""
+        self._block_size_save = True
+        GLib.timeout_add(500, self._unblock_size_save)
+
+    def _unblock_size_save(self):
+        """Desbloqueia salvamento de tamanho."""
+        self._block_size_save = False
+        return False
 
     def _enter_special_mode(self):
         """Salva o tamanho atual antes de entrar em modo display/compacto."""
@@ -588,10 +621,12 @@ class CryptoWindow(Adw.ApplicationWindow):
             except Exception:
                 pass
         self._in_special_mode = True
+        self._block_size_saving()
 
     def _leave_special_mode(self):
         """Marca que saiu do modo display/compacto."""
         self._in_special_mode = False
+        self._block_size_saving()
 
     def _restore_normal_size(self):
         """Restaura o tamanho normal salvo nas configurações."""
@@ -637,29 +672,92 @@ class CryptoWindow(Adw.ApplicationWindow):
                 )
             self._glass_css_provider = None
     
+    def _apply_compact_layout(self):
+        """Aplica layout compacto (apenas header + lista)."""
+        print("[DEBUG] _apply_compact_layout", flush=True)
+        # Garante que estamos no layout principal
+        self._restore_main_layout()
+
+        # Esconde container do display para não impor tamanho mínimo
+        self.display_container.set_visible(False)
+
+        # Esconde elementos não essenciais
+        self.search_box.set_visible(False)
+        self.status_box.set_visible(False)
+        self.glass_button.set_visible(False)
+        self.refresh_button.set_visible(False)
+
+        # Garante que a lista está visível
+        self.stack.set_visible_child_name("list")
+
+        # Permite que a lista encolha no modo compacto
+        self.listbox.set_size_request(260, 180)
+        self._scrolled.set_size_request(260, 180)
+
     def _apply_display_layout(self):
         """Aplica layout do modo display (esconde header, busca, status)."""
         print("[DEBUG] _apply_display_layout", flush=True)
+        # Restaura layout principal se estiver no compacto
+        if self.toast_overlay.get_child() != self._main_layout:
+            self._restore_main_layout()
+
         # Esconde header, busca e status
         self.main_header.set_visible(False)
         self.search_box.set_visible(False)
         self.status_box.set_visible(False)
-        
+
+        # Limpa restrições de tamanho do modo compacto
+        self.listbox.set_size_request(-1, -1)
+        self._scrolled.set_size_request(-1, -1)
+
+        # Mostra container do display
+        self.display_container.set_visible(True)
+
         # Mostra display se já tiver dados
         if self.cryptos:
             self._update_display()
             self.stack.set_visible_child_name("display")
         else:
             self.stack.set_visible_child_name("loading")
-    
+
+    def _restore_main_layout(self):
+        """Restaura a header bar e o layout principal no toast overlay."""
+        # Garante que a header bar está no layout principal
+        if self.main_header.get_parent() is None:
+            if hasattr(self._main_layout, 'add_top_bar'):
+                self._main_layout.add_top_bar(self.main_header)
+            else:
+                self._main_layout.prepend(self.main_header)
+
+        # Garante que o scrolled está no stack
+        if self._scrolled.get_parent() is None:
+            self.stack.add_named(self._scrolled, "list")
+
+        # Mostra botões da header bar novamente
+        self.glass_button.set_visible(True)
+        self.refresh_button.set_visible(True)
+
+        # Restaura layout principal no toast overlay
+        self.toast_overlay.set_child(self._main_layout)
+
     def _apply_full_layout(self):
         """Aplica layout completo (mostra header, busca, status)."""
         print("[DEBUG] _apply_full_layout", flush=True)
+        # Restaura layout principal
+        self._restore_main_layout()
+
         # Mostra header, busca e status
         self.main_header.set_visible(True)
         self.search_box.set_visible(True)
         self.status_box.set_visible(True)
-        
+
+        # Esconde container do display para não impor tamanho mínimo
+        self.display_container.set_visible(False)
+
+        # Limpa restrições de tamanho do modo compacto
+        self.listbox.set_size_request(-1, -1)
+        self._scrolled.set_size_request(-1, -1)
+
         # Volta para lista
         self.stack.set_visible_child_name("list")
     
@@ -690,8 +788,8 @@ class CryptoWindow(Adw.ApplicationWindow):
     
     def _on_window_size_changed(self, window, param):
         """Salva o tamanho da janela quando redimensionada."""
-        # Não salva em modos especiais (display/compacto)
-        if self._in_special_mode:
+        # Não salva em modos especiais (display/compacto) ou durante transições
+        if self._in_special_mode or self._block_size_save:
             return
 
         try:
@@ -722,6 +820,28 @@ class CryptoWindow(Adw.ApplicationWindow):
 
         return False  # Permite o fechamento
     
+    def _debug_sizes(self):
+        """Imprime tamanhos dos widgets para diagnóstico."""
+        def measure(widget, name):
+            try:
+                min_w, nat_w, _, _ = widget.measure(Gtk.Orientation.HORIZONTAL, -1)
+                min_h, nat_h, _, _ = widget.measure(Gtk.Orientation.VERTICAL, -1)
+                print(f"[DEBUG SIZE] {name}: min={min_w}x{min_h} nat={nat_w}x{nat_h}", flush=True)
+            except Exception as e:
+                print(f"[DEBUG SIZE] {name}: error {e}", flush=True)
+
+        measure(self, "Window")
+        measure(self.toast_overlay, "ToastOverlay")
+        measure(self.main_header, "HeaderBar")
+        measure(self._content, "Content")
+        measure(self.stack, "Stack")
+        measure(self._scrolled, "Scrolled")
+        measure(self._spinner_center, "SpinnerCenter")
+        measure(self.display_container, "DisplayContainer")
+        measure(self.list_container, "ListContainer")
+        measure(self.header_row, "HeaderRow")
+        measure(self.listbox, "ListBox")
+
     def _show_toast(self, message: str, toast_type: str = "info"):
         """Mostra uma notificação toast."""
         toast = Adw.Toast.new(message)

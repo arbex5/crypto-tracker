@@ -104,7 +104,7 @@ class CryptoApp(Adw.Application):
             self.window.compact_button.set_active(
                 not self.window.compact_button.get_active()
             )
-    
+
     def _on_preferences(self, action, param):
         """Callback para ação de preferências."""
         if self.window:
@@ -160,8 +160,8 @@ def setup_css():
         /* Botões de ativo no modo display */
         .asset-button {
             border-radius: 8px;
-            padding: 4px 8px;
-            min-width: 70px;
+            padding: 2px 4px;
+            min-width: 52px;
         }
 
         .asset-button.suggested-action {

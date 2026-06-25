@@ -209,7 +209,7 @@ class CryptoAPI:
         # Se não tem cache, busca das APIs
         if not cryptos:
             # Tenta CMC se configurado e tem crédito
-            if self.settings.use_cmc and self._usage.can_make_call(self.settings.max_daily_calls):
+            if self.settings.can_use_cmc() and self._usage.can_make_call(self.settings.max_daily_calls):
                 print(f"[DEBUG] Tentando CMC API...")
                 cryptos = self._fetch_from_cmc(limit)
                 if cryptos:
@@ -220,7 +220,7 @@ class CryptoAPI:
                 else:
                     print(f"[DEBUG] CMC falhou, erro: {self._last_error}")
             else:
-                if not self.settings.use_cmc:
+                if not self.settings.can_use_cmc():
                     print(f"[DEBUG] CMC não configurado ou desativado")
                 else:
                     print(f"[DEBUG] Limite de chamadas atingido")

@@ -23,12 +23,16 @@ class SparklineWidget(Gtk.DrawingArea):
     
     def __init__(self, width: int = 100, height: int = 35):
         super().__init__()
-        
-        self.set_content_width(width)
-        self.set_content_height(height)
+
+        # Tamanho de conteúdo mínimo; o widget expande para preencher o espaço
+        # disponível quando colocado em containers que expandem.
+        self.set_content_width(max(60, width))
+        self.set_content_height(max(40, height))
+        self.set_hexpand(True)
+        self.set_vexpand(True)
         self._data: list = []
         self._is_positive: bool = True
-        
+
         self.set_draw_func(self._draw_sparkline, None)
     
     def set_data(self, data: list, is_positive: bool = True):
@@ -429,12 +433,12 @@ class DisplayWidget(Gtk.Box):
         self.pin_supported = pin_supported
         self.quick_assets = [s.lower() for s in (quick_assets or [])]
         
-        self.set_margin_top(12)
-        self.set_margin_bottom(12)
-        self.set_margin_start(12)
-        self.set_margin_end(12)
+        self.set_margin_top(8)
+        self.set_margin_bottom(8)
+        self.set_margin_start(8)
+        self.set_margin_end(8)
         self.set_vexpand(True)
-        
+
         self._build_ui()
     
     def _get_crypto_by_symbol(self, symbol: str) -> Optional[Crypto]:
@@ -463,7 +467,7 @@ class DisplayWidget(Gtk.Box):
         
         # Header com ícone/nome à esquerda e preço à direita (com espaço para os botões do overlay)
         header = Gtk.CenterBox()
-        header.set_margin_end(48)  # Espaço para os botões de pin e modo completo no overlay
+        header.set_margin_end(40)  # Espaço para os botões de pin e modo completo no overlay
         
         # Ícone e nome à esquerda
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -557,7 +561,7 @@ class DisplayWidget(Gtk.Box):
             chart_overlay.set_margin_top(4)
             chart_overlay.set_margin_bottom(4)
             
-            sparkline = SparklineWidget(width=300, height=180)
+            sparkline = SparklineWidget(width=120, height=80)
             sparkline.set_data(
                 self.crypto.sparkline_7d,
                 self.crypto.is_positive_7d
@@ -591,9 +595,9 @@ class DisplayWidget(Gtk.Box):
             content.append(chart_overlay)
         
         # Botões de troca de ativo com preço e variação 1h (5 primeiros, reordenáveis)
-        self.assets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.assets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self.assets_box.set_halign(Gtk.Align.CENTER)
-        self.assets_box.set_margin_top(6)
+        self.assets_box.set_margin_top(4)
         self.assets_box.set_valign(Gtk.Align.END)
         self._rebuild_asset_buttons()
         
@@ -734,10 +738,10 @@ class DisplayWidget(Gtk.Box):
 
         # Container vertical para o conteúdo do botão
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        box.set_margin_top(4)
-        box.set_margin_bottom(4)
-        box.set_margin_start(6)
-        box.set_margin_end(6)
+        box.set_margin_top(2)
+        box.set_margin_bottom(2)
+        box.set_margin_start(3)
+        box.set_margin_end(3)
 
         # Símbolo
         symbol_label = Gtk.Label(label=symbol)

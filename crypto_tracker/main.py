@@ -160,8 +160,8 @@ def setup_css():
         /* Botões de ativo no modo display */
         .asset-button {
             border-radius: 8px;
-            padding: 2px 4px;
-            min-width: 52px;
+            padding: 2px 3px;
+            min-width: 64px;
         }
 
         .asset-button.suggested-action {

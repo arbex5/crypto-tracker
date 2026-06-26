@@ -2,6 +2,46 @@
 
 Todas as mudanças e melhorias feitas no projeto estão documentadas aqui.
 
+## [Unreleased] - 2026-06-25
+
+### ✨ Novas funcionalidades
+
+#### Barra rolável de favoritos no modo Display
+- Botões de troca de ativo no modo display agora usam uma área rolável
+  horizontal (`Gtk.ScrolledWindow`)
+- Mostra **todos os ativos favoritos** do usuário
+- Navegação por setas `<` e `>` quando há mais ativos do que cabem na tela
+- Botões alinhados à esquerda, com tamanho fixo de 64 px
+- Rola até o último botão sem deixar espaço em branco
+- Fallback para os 3 principais ativos (BTC, ETH, XRP etc.) quando não há favoritos
+
+#### Redimensionamento do modo Display
+- Mantida a decoração da janela (`set_decorated(True)`) para preservar as
+  bordas de redimensionamento nativas do window manager
+- Adicionado um grip de redimensionamento manual no canto inferior direito
+  como alternativa
+- Tamanho mínimo do modo display reduzido para aproximadamente 200x204
+
+### 🔧 Correções de bugs
+
+- Corrigido o redimensionamento que parava de funcionar quando a decoração
+  era removida no modo display
+
+### 📝 Documentação
+
+- Atualizado `docs/WINDOW_RESIZE_NOTES.md` com a solução final de
+  redimensionamento e a nova seção sobre o carrossel de favoritos
+
+### 🗂️ Arquivos modificados
+
+- `crypto_tracker/window.py` - Ajustes no modo display (decoração, grip,
+  passagem de favoritos para o DisplayWidget)
+- `crypto_tracker/widgets.py` - Novo `ResizeGrip`, `DisplayWidget` com
+  `Adw.Carousel` e lógica de favoritos
+- `crypto_tracker/main.py` - Ajuste no CSS dos botões de ativo
+- `docs/WINDOW_RESIZE_NOTES.md` - Documentação atualizada
+- `CHANGELOG.md` - Registro das mudanças
+
 ## [1.2.1] - 2026-06-25
 
 ### 🔧 Correções de bugs

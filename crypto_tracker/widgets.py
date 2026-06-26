@@ -6,7 +6,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
 from typing import Optional, List
-from gi.repository import Gtk, Gdk, GObject, GLib
+from gi.repository import Gtk, Adw, Gdk, GObject, GLib
 from .models import Crypto
 from .icons import get_icon_manager
 import math
@@ -21,13 +21,13 @@ except ImportError:
 class SparklineWidget(Gtk.DrawingArea):
     """Widget que desenha um gráfico sparkline."""
     
-    def __init__(self, width: int = 100, height: int = 35):
+    def __init__(self, width: int = 60, height: int = 35):
         super().__init__()
 
         # Tamanho de conteúdo mínimo; o widget expande para preencher o espaço
         # disponível quando colocado em containers que expandem.
-        self.set_content_width(max(60, width))
-        self.set_content_height(max(40, height))
+        self.set_content_width(max(40, width))
+        self.set_content_height(max(30, height))
         self.set_hexpand(True)
         self.set_vexpand(True)
         self._data: list = []
@@ -115,6 +115,49 @@ class SparklineWidget(Gtk.DrawingArea):
             ctx.fill()
             
             ctx.restore()
+
+
+class ResizeGrip(Gtk.Box):
+    """Pequeno grip de redimensionamento para janelas sem decoração."""
+
+    def __init__(self, on_begin_resize=None, edge=Gdk.SurfaceEdge.SOUTH_EAST):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._on_begin_resize = on_begin_resize
+        self._edge = edge
+
+        self.set_halign(Gtk.Align.END)
+        self.set_valign(Gtk.Align.END)
+        self.set_margin_end(2)
+        self.set_margin_bottom(2)
+        self.set_size_request(18, 18)
+        self.set_cursor_from_name("se-resize")
+        self.add_css_class("resize-grip")
+
+        icon = Gtk.Label(label="⋮")
+        icon.set_margin_end(2)
+        icon.add_css_class("dim-label")
+        icon.add_css_class("caption")
+        self.append(icon)
+
+        gesture = Gtk.GestureClick()
+        gesture.set_button(Gdk.BUTTON_PRIMARY)
+        gesture.connect("pressed", self._on_pressed)
+        self.add_controller(gesture)
+
+    def _on_pressed(self, gesture, n_press, x, y):
+        print(f"[DEBUG] ResizeGrip pressed x={x} y={y}", flush=True)
+        if not self._on_begin_resize:
+            print("[DEBUG] ResizeGrip: no callback", flush=True)
+            return
+
+        sequence = gesture.get_current_sequence()
+        event = gesture.get_last_event(sequence)
+        if event is None:
+            print("[DEBUG] ResizeGrip: no event", flush=True)
+            return
+
+        print("[DEBUG] ResizeGrip: calling begin_resize", flush=True)
+        self._on_begin_resize(self._edge, event)
 
 
 class CompactCryptoRow(Gtk.ListBoxRow):
@@ -421,8 +464,8 @@ class CryptoRow(Gtk.ListBoxRow):
 class DisplayWidget(Gtk.Box):
     """Widget de display minimalista estilo dashboard para modo glass."""
     
-    def __init__(self, crypto: Crypto, available_cryptos: list = None, on_asset_change=None, on_back=None, on_pin_toggle=None, on_quick_assets_reordered=None, is_pinned: bool = False, pin_supported: bool = True, quick_assets: list = None):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    def __init__(self, crypto: Crypto, available_cryptos: list = None, on_asset_change=None, on_back=None, on_pin_toggle=None, on_quick_assets_reordered=None, is_pinned: bool = False, pin_supported: bool = True, quick_assets: list = None, favorites: list = None, on_begin_resize=None):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.crypto = crypto
         self.available_cryptos = available_cryptos or []
         self.on_asset_change = on_asset_change
@@ -432,12 +475,15 @@ class DisplayWidget(Gtk.Box):
         self.is_pinned = is_pinned
         self.pin_supported = pin_supported
         self.quick_assets = [s.lower() for s in (quick_assets or [])]
-        
-        self.set_margin_top(8)
-        self.set_margin_bottom(8)
-        self.set_margin_start(8)
-        self.set_margin_end(8)
+        self.favorites = [s.lower() for s in (favorites or [])]
+        self.on_begin_resize = on_begin_resize
+
+        self.set_margin_top(4)
+        self.set_margin_bottom(4)
+        self.set_margin_start(4)
+        self.set_margin_end(4)
         self.set_vexpand(True)
+        self.set_size_request(160, 120)
 
         self._build_ui()
     
@@ -462,60 +508,58 @@ class DisplayWidget(Gtk.Box):
         overlay.set_vexpand(True)
         
         # Conteúdo principal
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         content.set_vexpand(True)
-        
-        # Header com ícone/nome à esquerda e preço à direita (com espaço para os botões do overlay)
-        header = Gtk.CenterBox()
-        header.set_margin_end(40)  # Espaço para os botões de pin e modo completo no overlay
-        
-        # Ícone e nome à esquerda
-        left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        
+
+        # Header com ícone/nome/preço em coluna para economizar largura
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.set_margin_end(20)  # Espaço para os botões de pin e modo completo no overlay
+
         icon_manager = get_icon_manager()
-        icon_widget = icon_manager.create_icon_with_fallback(self.crypto.symbol, 56)
-        left_box.append(icon_widget)
-        
-        name_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        name_box.set_halign(Gtk.Align.START)
-        
+        icon_widget = icon_manager.create_icon_with_fallback(self.crypto.symbol, 32)
+        header.append(icon_widget)
+
+        name_price_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        name_price_box.set_hexpand(True)
+        name_price_box.set_halign(Gtk.Align.START)
+
         name_label = Gtk.Label(label=self.crypto.name)
         name_label.set_xalign(0)
-        name_label.add_css_class("title-2")
-        name_box.append(name_label)
-        
+        name_label.add_css_class("title-3")
+        name_label.set_ellipsize(3)
+        name_label.set_max_width_chars(12)
+        name_price_box.append(name_label)
+
+        price_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        price_row.set_halign(Gtk.Align.START)
+
+        trend_icon = Gtk.Label(label="▲" if self.crypto.is_positive_24h else "▼")
+        trend_icon.add_css_class("success" if self.crypto.is_positive_24h else "error")
+        trend_icon.add_css_class("caption-heading")
+        price_row.append(trend_icon)
+
+        price_label = Gtk.Label(label=self.crypto.formatted_price)
+        price_label.add_css_class("caption-heading")
+        price_label.add_css_class("numeric")
+        price_label.set_ellipsize(3)
+        price_row.append(price_label)
+
         symbol_label = Gtk.Label(label=self.crypto.symbol_upper)
         symbol_label.set_xalign(0)
         symbol_label.add_css_class("dim-label")
         symbol_label.add_css_class("caption")
-        name_box.append(symbol_label)
-        
-        left_box.append(name_box)
-        header.set_start_widget(left_box)
-        
-        # Preço com seta de tendência à direita
-        price_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        price_box.set_halign(Gtk.Align.END)
-        price_box.set_valign(Gtk.Align.CENTER)
-        
-        trend_icon = Gtk.Label(label="▲" if self.crypto.is_positive_24h else "▼")
-        trend_icon.add_css_class("success" if self.crypto.is_positive_24h else "error")
-        trend_icon.add_css_class("title-1")
-        price_box.append(trend_icon)
-        
-        price_label = Gtk.Label(label=self.crypto.formatted_price)
-        price_label.add_css_class("title-1")
-        price_label.add_css_class("numeric")
-        price_box.append(price_label)
-        
-        header.set_end_widget(price_box)
+        symbol_label.set_margin_start(6)
+        price_row.append(symbol_label)
+
+        name_price_box.append(price_row)
+        header.append(name_price_box)
         content.append(header)
         
         # Variações 1h / 24h / 7d / USD-BRL
-        changes_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        changes_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         changes_box.set_halign(Gtk.Align.CENTER)
-        changes_box.set_margin_top(4)
-        changes_box.set_margin_bottom(4)
+        changes_box.set_margin_top(2)
+        changes_box.set_margin_bottom(2)
 
         usd_brl = self._get_usd_brl_crypto()
 
@@ -538,7 +582,7 @@ class DisplayWidget(Gtk.Box):
             change_box.append(period_label)
 
             value_label = Gtk.Label(label=value_text)
-            value_label.add_css_class("caption-heading")
+            value_label.add_css_class("caption")
             value_label.add_css_class("numeric")
             if label == "USD/BRL":
                 value_label.add_css_class("success" if is_positive else "error")
@@ -558,10 +602,10 @@ class DisplayWidget(Gtk.Box):
             chart_overlay = Gtk.Overlay()
             chart_overlay.set_vexpand(True)
             chart_overlay.set_valign(Gtk.Align.FILL)
-            chart_overlay.set_margin_top(4)
-            chart_overlay.set_margin_bottom(4)
-            
-            sparkline = SparklineWidget(width=120, height=80)
+            chart_overlay.set_margin_top(2)
+            chart_overlay.set_margin_bottom(2)
+
+            sparkline = SparklineWidget(width=60, height=40)
             sparkline.set_data(
                 self.crypto.sparkline_7d,
                 self.crypto.is_positive_7d
@@ -594,14 +638,41 @@ class DisplayWidget(Gtk.Box):
             
             content.append(chart_overlay)
         
-        # Botões de troca de ativo com preço e variação 1h (5 primeiros, reordenáveis)
+        # Botões de troca de ativo em área rolável horizontal (favoritos)
         self.assets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        self.assets_box.set_halign(Gtk.Align.CENTER)
-        self.assets_box.set_margin_top(4)
+        self.assets_box.set_halign(Gtk.Align.START)
         self.assets_box.set_valign(Gtk.Align.END)
+
+        self.assets_scrolled = Gtk.ScrolledWindow()
+        self.assets_scrolled.set_hexpand(True)
+        self.assets_scrolled.set_halign(Gtk.Align.FILL)
+        self.assets_scrolled.set_margin_top(4)
+        self.assets_scrolled.set_margin_bottom(4)
+        self.assets_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        self.assets_scrolled.set_child(self.assets_box)
+
+        self._prev_asset_btn = Gtk.Button(icon_name="go-previous-symbolic")
+        self._prev_asset_btn.set_tooltip_text("Ativo anterior")
+        self._prev_asset_btn.add_css_class("flat")
+        self._prev_asset_btn.add_css_class("circular")
+        self._prev_asset_btn.connect("clicked", self._on_prev_asset)
+
+        self._next_asset_btn = Gtk.Button(icon_name="go-next-symbolic")
+        self._next_asset_btn.set_tooltip_text("Próximo ativo")
+        self._next_asset_btn.add_css_class("flat")
+        self._next_asset_btn.add_css_class("circular")
+        self._next_asset_btn.connect("clicked", self._on_next_asset)
+
+        assets_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        assets_row.set_valign(Gtk.Align.END)
+        assets_row.set_halign(Gtk.Align.FILL)
+        assets_row.append(self._prev_asset_btn)
+        assets_row.append(self.assets_scrolled)
+        assets_row.append(self._next_asset_btn)
+
         self._rebuild_asset_buttons()
-        
-        content.append(self.assets_box)
+
+        content.append(assets_row)
         
         overlay.set_child(content)
         
@@ -619,7 +690,7 @@ class DisplayWidget(Gtk.Box):
             pin_btn.set_tooltip_text("Desafixar" if self.is_pinned else "Fixar no topo")
             pin_btn.connect("clicked", self._on_pin_clicked)
         else:
-            pin_btn.set_tooltip_text("Fixar no topo não é suportado neste ambiente (Wayland)")
+            pin_btn.set_tooltip_text("Fixar no topo não é suportado neste ambiente")
             pin_btn.set_sensitive(False)
         pin_btn.add_css_class("flat")
         pin_btn.add_css_class("circular")
@@ -635,7 +706,12 @@ class DisplayWidget(Gtk.Box):
         overlay_buttons.append(back_btn)
         
         overlay.add_overlay(overlay_buttons)
-        
+
+        # Grip de redimensionamento para janelas sem decoração
+        if self.on_begin_resize:
+            resize_grip = ResizeGrip(on_begin_resize=self.on_begin_resize)
+            overlay.add_overlay(resize_grip)
+
         self.append(overlay)
     
     def _on_pin_clicked(self, button):
@@ -645,33 +721,62 @@ class DisplayWidget(Gtk.Box):
         button.set_tooltip_text("Desafixar" if self.is_pinned else "Fixar no topo")
         if self.on_pin_toggle:
             self.on_pin_toggle(self.is_pinned)
+
+    def _on_prev_asset(self, button):
+        """Navega para o ativo anterior na área rolável."""
+        adj = self.assets_scrolled.get_hadjustment()
+        step = adj.get_step_increment()
+        adj.set_value(max(adj.get_lower(), adj.get_value() - step))
+
+    def _on_next_asset(self, button):
+        """Navega para o próximo ativo na área rolável."""
+        adj = self.assets_scrolled.get_hadjustment()
+        step = adj.get_step_increment()
+        adj.set_value(min(adj.get_upper() - adj.get_page_size(), adj.get_value() + step))
     
     def _get_quick_assets(self) -> List[str]:
-        """Retorna os 5 símbolos de acesso rápido (ordem salva + primeiros da lista)."""
+        """Retorna os ativos de acesso rápido: favoritos primeiro, depois ordem salva, depois principais."""
         # Símbolos disponíveis, excluindo USD-BRL
-        available_symbols = [
-            c.symbol.upper() for c in self.available_cryptos
+        available_cryptos = [
+            c for c in self.available_cryptos
             if c.symbol.lower() != "usd" and c.id.lower() != "usd-brl"
         ]
+        available_symbols = [c.symbol.upper() for c in available_cryptos]
+
+        # Favoritos por ID, convertidos para símbolo
+        favorite_symbols = []
+        for cid in self.favorites:
+            for c in available_cryptos:
+                if c.id.lower() == cid:
+                    sym = c.symbol.upper()
+                    if sym not in favorite_symbols:
+                        favorite_symbols.append(sym)
+                    break
 
         # Começa com a ordem salva, mantendo apenas os que ainda existem
-        result = []
+        saved_symbols = []
         for symbol in self.quick_assets:
             sym_upper = symbol.upper()
-            if sym_upper in available_symbols and sym_upper not in result:
-                result.append(sym_upper)
+            if sym_upper in available_symbols and sym_upper not in saved_symbols:
+                saved_symbols.append(sym_upper)
 
-        # Completa com os primeiros ativos da lista até ter 5
-        for symbol in available_symbols:
-            if len(result) >= 5:
-                break
-            if symbol not in result:
-                result.append(symbol)
+        # Se houver favoritos, mostra apenas eles (na ordem salvos + favoritos).
+        # Caso contrário, usa a ordem salva e completa com os principais.
+        if favorite_symbols:
+            result = []
+            for sym in saved_symbols + favorite_symbols:
+                if sym not in result:
+                    result.append(sym)
+            return result
 
-        return result[:5]
+        result = []
+        for sym in saved_symbols + available_symbols:
+            if sym not in result:
+                result.append(sym)
+        return result[:3]
 
     def _rebuild_asset_buttons(self):
-        """Reconstrói os botões de acesso rápido."""
+        """Reconstrói os botões de acesso rápido na área rolável."""
         # Remove botões antigos
         while True:
             child = self.assets_box.get_first_child()
@@ -679,9 +784,15 @@ class DisplayWidget(Gtk.Box):
                 break
             self.assets_box.remove(child)
 
-        for i, symbol in enumerate(self._get_quick_assets()):
+        assets = self._get_quick_assets()
+        for i, symbol in enumerate(assets):
             btn = self._create_asset_button(symbol, index=i)
             self.assets_box.append(btn)
+
+        # Ajusta visibilidade das setas de navegação
+        has_multiple = len(assets) > 1
+        self._prev_asset_btn.set_visible(has_multiple)
+        self._next_asset_btn.set_visible(has_multiple)
 
     def _on_asset_drag_prepare(self, source, x, y):
         """Prepara o drag de um botão de ativo."""
@@ -770,6 +881,8 @@ class DisplayWidget(Gtk.Box):
 
         btn = Gtk.Button()
         btn.set_child(box)
+        btn.set_size_request(64, -1)
+        btn.set_hexpand(False)
         btn.add_css_class("asset-button")
         if is_current:
             btn.add_css_class("suggested-action")

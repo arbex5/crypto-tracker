@@ -12,6 +12,10 @@ o **modo compacto** não ficava realmente pequeno. Além disso, o tamanho salvo
 em `settings.json` estava sendo corrompido com valores estranhos (ex: `400x378`
 em vez do tamanho normal da janela).
 
+Também documentamos aqui a evolução dos **botões de troca de ativo** no modo
+display: de uma barra fixa com 3 ativos para um carrossel de favoritos com
+navegação `<`/`>`.
+
 ## Descobertas técnicas
 
 ### 1. GTK4 não permite redimensionar uma janela já visível
@@ -82,6 +86,12 @@ transição (ex: `400x378`) em vez do tamanho normal do usuário.
   permita que o usuário redimensione manualmente.
 - Tornar o `DisplayWidget` mais flexível (sparkline com `hexpand`/`vexpand` e
   tamanhos de conteúdo menores) para não impor largura excessiva.
+- Reduzir número de ativos de acesso rápido e `min-width` dos botões para
+  diminuir a largura mínima natural do display.
+- Manter `set_decorated(True)` para preservar as bordas de redimensionamento
+  nativas do WM; apenas esconder a `HeaderBar` no layout do display.
+- Adicionar um **grip de redimensionamento manual** no canto inferior direito
+  do display como reforço/alternativa, que chama `Gdk.Toplevel.begin_resize()`.
 - Continuar permitindo `set_resizable(True)`.
 
 ### Modo compacto
@@ -94,6 +104,24 @@ transição (ex: `400x378`) em vez do tamanho normal do usuário.
 - Mostrar no máximo 5 itens na lista (`max_items = 5`).
 - Esconder botões não essenciais da header (`glass_button`, `refresh_button`).
 - Reduzir `size_request` da lista para permitir janela pequena.
+
+### Botões de ativo no modo display
+
+- Substituir a barra fixa de ativos (`Gtk.Box`) por uma área rolável horizontal
+  (`Gtk.ScrolledWindow`) contendo um `Gtk.Box` com os botões.
+- Cada botão tem **tamanho fixo de 64 px**.
+- Os botões são alinhados à **esquerda**; a rolagem vai até o último botão sem
+  deixar espaço em branco no final.
+- Adicionar botões de navegação `<` e `>` ao redor da área rolável, visíveis
+  apenas quando há mais de um ativo.
+- A lista de ativos exibidos segue a prioridade:
+  1. **Favoritos** do usuário (`settings.favorites`), convertidos de ID para
+     símbolo.
+  2. Ordem salva manualmente (`settings.display_quick_assets`).
+  3. Se não houver favoritos, fallback com os 3 principais ativos (BTC, ETH,
+     XRP etc.) para não poluir a interface.
+- O drag-and-drop de reordenação permanece nos botões; a ordem resultante é
+  salva em `display_quick_assets`.
 
 ### Persistência de tamanho
 

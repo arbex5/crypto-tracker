@@ -428,7 +428,9 @@ class CryptoWindow(Adw.ApplicationWindow):
             on_quick_assets_reordered=self._on_quick_assets_reordered,
             is_pinned=self.settings.display_pinned,
             pin_supported=self._supports_keep_above,
-            quick_assets=self.settings.display_quick_assets
+            quick_assets=self.settings.display_quick_assets,
+            favorites=self.settings.favorites,
+            on_begin_resize=self._on_begin_resize
         )
         self.display_container.append(self.display_widget)
     
@@ -557,8 +559,9 @@ class CryptoWindow(Adw.ApplicationWindow):
         # Adiciona classe CSS para glass effect
         self._add_glass_css()
 
-        # Remove decoração
-        self.set_decorated(False)
+        # Mantém decoração do WM para preservar bordas de redimensionamento.
+        # A header bar principal é escondida no layout do display.
+        self.set_decorated(True)
 
         # Aplica layout do display
         self._apply_display_layout()
@@ -566,14 +569,13 @@ class CryptoWindow(Adw.ApplicationWindow):
         # GTK4 não permite redimensionar uma janela já visível via API.
         # Reduzimos o size-request do conteúdo para que o WM permita que o
         # usuário redimensione manualmente para baixo.
-        self.display_container.set_size_request(280, 240)
+        self.display_container.set_size_request(200, 160)
 
     def _disable_glass_mode(self):
         """Desativa modo display e volta ao modo completo."""
         print("[DEBUG] _disable_glass_mode", flush=True)
         self.set_opacity(1.0)
         self._set_keep_above_safe(False)
-        self.set_decorated(True)
 
         # Remove CSS personalizado
         self._remove_glass_css()
@@ -595,6 +597,23 @@ class CryptoWindow(Adw.ApplicationWindow):
                 print(f"[DEBUG] set_keep_above failed: {e}", flush=True)
         else:
             print(f"[DEBUG] keep_above not supported by this GTK/window manager", flush=True)
+
+    def _on_begin_resize(self, edge, event):
+        """Inicia redimensionamento interativo quando o grip é arrastado."""
+        try:
+            surface = self.get_surface()
+            if surface is None or not isinstance(surface, Gdk.Toplevel):
+                return
+            surface.begin_resize(
+                edge,
+                event.get_device(),
+                event.get_button(),
+                event.get_x(),
+                event.get_y(),
+                event.get_time()
+            )
+        except Exception as e:
+            print(f"[DEBUG] begin_resize failed: {e}", flush=True)
 
     def _on_window_realized(self, window):
         """Marca que a janela já foi apresentada ao window manager."""
@@ -838,6 +857,19 @@ class CryptoWindow(Adw.ApplicationWindow):
         measure(self._scrolled, "Scrolled")
         measure(self._spinner_center, "SpinnerCenter")
         measure(self.display_container, "DisplayContainer")
+        if self.display_widget:
+            measure(self.display_widget, "DisplayWidget")
+            child = self.display_widget.get_first_child()
+            while child:
+                measure(child, f"  DW.child.{type(child).__name__}")
+                sub = child.get_first_child()
+                if sub:
+                    measure(sub, f"    DW.sub.{type(sub).__name__}")
+                    sub2 = sub.get_first_child()
+                    while sub2:
+                        measure(sub2, f"      DW.sub2.{type(sub2).__name__}")
+                        sub2 = sub2.get_next_sibling()
+                child = child.get_next_sibling()
         measure(self.list_container, "ListContainer")
         measure(self.header_row, "HeaderRow")
         measure(self.listbox, "ListBox")
